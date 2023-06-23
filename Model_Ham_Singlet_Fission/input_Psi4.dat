@@ -1,0 +1,192 @@
+# Pablo ROSEIRO - 23.06.2023
+# This Python script evaluates the Atomic Orbitals integrals of a dimer of H2 using the built-in functions of Psi4
+# It then produces a .py file where the AOs integrals are stored as python functions for each distances 
+
+import numpy as np
+
+
+# Define the molecule characteristics, no charge (Z=0): 4e-
+def rep(molecule):
+    charge = molecule.molecular_charge()
+    mult = molecule.multiplicity()
+    Z = 0
+    for A in range(molecule.natom()):
+        Z += molecule.Z(A)
+    ndocc = int(Z / 2) - (charge / 2)  # number of doubly-occupied orbitals
+    Enuc = molecule.nuclear_repulsion_energy()
+    return Enuc
+
+# Create a textfile to store all the integrals as Python functions
+text_file0 = open('change_all_test.py', 'w')
+
+# distance is the INTRAmolecular distance
+## for distance in [0.555, 0.666, 0.74, 0.814, 0.925, 1.11, 1.48, 2.22, 2.96, 3.7]:
+for distance in [0.74]:
+    text_file0.write('\n')
+    # dist is the INTERmolecular distance
+    for dist in [1.8, 1.9, 2.0,2.1,2.2,2.3,2.4, 2.5,2.6,2.7,2.8,2.9, 3.0, 3.5, 5.0, 7.5, 10.0, 20.0]:
+        dist2 = float(dist/2)
+        l_bond = float(distance/2)
+        # Atomic coordinates in Angstrom
+        molecule mol {
+            0 1
+            H """ + str(-dist2) + """   """ +  str(-l_bond) + """ 0.000000
+            H """ + str(-dist2) + """   """ + str(l_bond) + """   0.000000
+            H """ + str(dist2) + """    """ +  str(-l_bond) + """   0.000000
+            H """ + str(dist2) + """    """ + str(l_bond) + """    0.000000
+            units angstrom
+
+        }
+
+        # The basis set used (the STO-3G basis set)
+        set {
+            basis = STO-3G
+        }
+	# Build the wavefunction
+        wfn = psi4.core.Wavefunction.build(
+            mol, psi4.core.get_global_option('BASIS'))
+	# Computes all integrals
+        mints = MintsHelper(wfn.basisset())
+
+        # Evaluation of the kinetic energy term, potential energy term, the two-electron integral and the overlap integral
+        T = mints.ao_kinetic()
+        V = mints.ao_potential()
+        I = mints.ao_eri()
+        S = mints.ao_overlap()
+	# Extract the number of AOs for H 
+        nbf = S.rows(0)
+        
+        T = np.array(T)
+        V = np.array(V)
+        S = np.array(S)
+        # Prepare the NxN Hamiltonian
+        H = np.zeros((nbf, nbf))
+
+        # the one-electron integral, H, is basically the sum of kinetic energy term and potential energy term
+
+        for i in range(nbf):
+            for j in range(nbf):
+                H[i][j] = T[i][j]+V[i][j]
+	# the two-electron integrals, I, a NxNxNxN matrix
+        I = np.array(I).reshape(nbf, nbf, nbf, nbf)
+
+	## WRITING INTO FILE
+	# Title for the function
+        text_file0.write('\n' + 'def dist' + str(int(dist)) + '_' + str(round((dist - int(dist))*10)) +
+                         'A_bond' + str(int(distance)) + '_' + str(int((distance - int(distance))*1000)) + 'A():' + '\n')
+	# L in bohr radius
+        text_file0.write('\t L' + '\t' + '=' + '\t' +
+                         str(dist) + "/ 0.5291 \n")
+	# l in bohr radius
+        text_file0.write('\t l' + '\t' + '=' + '\t' +
+                         str(distance) + "/ 0.5291 \n")
+
+	# ONE ELECTRON INTEGRALS
+        ii = str(H[0][0])
+        text_file0.write('\t eps' + '\t' + '=' + '\t' + str(ii) + '\n')
+
+        ii = str(H[0][1])
+        text_file0.write("\t t" + '\t' + '=' + '\t' + str(ii) + '\n')
+
+        ii = str(H[0][2])
+        text_file0.write("\t t_i" + '\t' + '=' + '\t' + str(ii) + '\n')
+
+        ii = str(H[0][3])
+        text_file0.write("\t t_i2" + '\t' + '=' + '\t' + str(ii) + '\n')
+
+	# TWO ELECTRON INTEGRALS
+        i, j, k, p = 0, 0, 0, 0
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t U' + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 0, 1, 1
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t J' + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 1, 0, 1
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t K' + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 0, 2, 2
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t Jbis" + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 2, 0, 2
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t Kbis" + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 1, 2, 3
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t omega1' + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 3, 0, 3
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t omega2' + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 3, 2, 1
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t omega3' + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 2, 1, 3
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t theta1' + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 2, 1, 2
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t theta2' + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 0, 0, 1
+        ii = str(I[i][j][k][p])
+        text_file0.write('\t lambda1' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 2, 2, 0, 1
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t lambda2" + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 0, 3, 3
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t J1 " + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 0, 0, 2
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t gamma1 " + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 0, 1, 3
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t gamma2 " + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 0, 0, 3
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t gamma3 " + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 0, 2, 1
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t gamma4 " + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 1, 0, 2
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t gamma5 " + '\t' + '=' + '\t' + ii + '\n')
+
+        i, j, k, p = 0, 1, 0, 3
+        ii = str(I[i][j][k][p])
+        text_file0.write("\t gamma6 " + '\t' + '=' + '\t' + ii + '\n')
+
+	# OVERLAPS
+        r = 0
+        s = 1
+        rr = str(S[r][s])
+        text_file0.write("\t S" + '\t' + '=' + '\t' + rr + '\n')
+
+        s = 2
+        rr = str(S[r][s])
+        text_file0.write("\t S_i"+'\t' + '=' + '\t' + rr + '\n')
+
+        s = 3
+        rr = str(S[r][s])
+        text_file0.write("\t S_i2"+'\t' + '=' + '\t' + rr + '\n')
+
+	# end of the function
+        text_file0.write(
+            '\t return L,l,S,S_i,S_i2,U,t,t_i,t_i2,eps,J,K,Jbis,Kbis,omega1,omega2,omega3,theta1,theta2,lambda1,lambda2,J1,gamma1,gamma2,gamma3,gamma4,gamma5,gamma6 \n')
+
+text_file0.close()
